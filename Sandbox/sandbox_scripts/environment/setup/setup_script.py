@@ -118,7 +118,7 @@ class EnvironmentSetup(object):
         """
 
         # Reading version lookup info from FTP
-		ftp_host, user, password = self._get_ftp(api, self.reservation_id)
+        ftp_host, user, password = self._get_ftp(api, self.reservation_id)
         try:
             ftp = ftplib.FTP(ftp_host)  # connect to FTP
             ftp.login(user, password)
