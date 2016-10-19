@@ -44,6 +44,15 @@ except Exception as exc:
 version_lines=[]
 try:
     device_configs = ftp.nlst('Configs/Devices/' + resource.name)
+
+except Exception as exc:
+    if exc.message == '550 Directory not found.':
+        device_configs = []
+    else:
+        ses.WriteMessageToReservationOutput(reservation.id,
+                                        'Unable to retrieve list of configs from FTP. Error: {0}'.format(str(exc)))
+
+try:
     model_configs = ftp.nlst('Configs/Models/' + resource_model)
 
 except Exception as exc:

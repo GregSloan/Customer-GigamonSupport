@@ -142,7 +142,7 @@ class EnvironmentSetup(object):
             version_lines=version_lines[0].split('\r')
             version_lines=map(str.strip,version_lines)
             version_lookup = {}
-        except:
+        except Exception as exc:
             self.logger.error('Unable to apply software images, unable to parse firmware version file. Error: {0}'.format(str(exc)))
             api.WriteMessageToReservationOutput(reservationId=self.reservation_id,
                                                                 message='Unable to apply software images, unable to parse firmware version file Error: {0}'.format(str(exc)))
