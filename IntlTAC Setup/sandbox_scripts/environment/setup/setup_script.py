@@ -66,11 +66,6 @@ class EnvironmentSetup(object):
         if deploy_result and deploy_result.ResultItems:
             reservation_details = api.GetReservationDetails(self.reservation_id)
 
-        self._try_exeucte_autoload(api=api,
-                                   reservation_details=reservation_details,
-                                   deploy_result=deploy_result,
-                                   resource_details_cache=resource_details_cache)
-
         self._connect_all_routes_in_reservation(api=api,
                                                 reservation_details=reservation_details)
 
@@ -78,6 +73,11 @@ class EnvironmentSetup(object):
                                                     reservation_details=reservation_details,
                                                     deploy_results=deploy_result,
                                                     resource_details_cache=resource_details_cache)
+
+        self._try_exeucte_autoload(api=api,
+                                   reservation_details=reservation_details,
+                                   deploy_result=deploy_result,
+                                   resource_details_cache=resource_details_cache)
 
         remote_host, user, password = self._get_ftp(api, self.reservation_id)
 
@@ -119,14 +119,13 @@ class EnvironmentSetup(object):
 
         # Reading version lookup info from FTP
         ftp_host, user, password = self._get_ftp(api, self.reservation_id)
+
         try:
             ftp = ftplib.FTP(ftp_host)  # connect to FTP
             ftp.login(user, password)
         except Exception as exc:
             self.logger.error('Unable to apply software images, unable to connect to FTP server. Error: {0}'.format(str(exc)))
-            api.WriteMessageToReservationOutput(reservationId=self.reservation_id,
-                                                                message='Unable to apply software images, unable to connect to FTP server. Error: {0}'.format(str(exc)))
-            return
+
 
         version_lines=[]
         try:
@@ -142,7 +141,7 @@ class EnvironmentSetup(object):
             version_lines=version_lines[0].split('\r')
             version_lines=map(str.strip,version_lines)
             version_lookup = {}
-        except Exception as exc:
+        except:
             self.logger.error('Unable to apply software images, unable to parse firmware version file. Error: {0}'.format(str(exc)))
             api.WriteMessageToReservationOutput(reservationId=self.reservation_id,
                                                                 message='Unable to apply software images, unable to parse firmware version file Error: {0}'.format(str(exc)))
@@ -167,6 +166,11 @@ class EnvironmentSetup(object):
 
                 for command in command_list:
                     if command.Name == 'load_firmware':
+                        if ftp_host is None:
+                            api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message =
+                                                                'Error loading firmware on ' + resource.Name +
+                                                                ', FTP connected')
+                            break
                         api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message='Loading firmware on ' +
                                                                                                resource.Name)
                         api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message='-- ' +
@@ -393,7 +397,7 @@ class EnvironmentSetup(object):
                 self.logger.debug("Resource {0} is not a deployed app, nothing to do with it".format(deployed_app_name))
                 return True, ""
 
-            auto_power_on_param = get_vm_custom_param(resource_details, "auto_power_on")
+            auto_power_on_param = get_vm_custom_param(resource_details, "Auto Power On")
             if auto_power_on_param:
                 power_on = auto_power_on_param.Value
 
@@ -411,27 +415,28 @@ class EnvironmentSetup(object):
                               "Will use default settings. Error: {2}".format(deployed_app_name,
                                                                              self.reservation_id,
                                                                              str(exc)))
+        if resource_details.ResourceModelName != 'vCenter Static VM':
+            try:
+                self._power_on(api, deployed_app_name, power_on, lock, message_status)
+            except Exception as exc:
+                self.logger.error("Error powering on deployed app {0} in reservation {1}. Error: {2}"
+                                  .format(deployed_app_name, self.reservation_id, str(exc)))
+                return False, "Error powering on deployed app {0}".format(deployed_app_name)
 
-        try:
-            self._power_on(api, deployed_app_name, power_on, lock, message_status)
-        except Exception as exc:
-            self.logger.error("Error powering on deployed app {0} in reservation {1}. Error: {2}"
-                              .format(deployed_app_name, self.reservation_id, str(exc)))
-            return False, "Error powering on deployed app {0}".format(deployed_app_name)
+        if resource_details.ResourceModelName != 'vCenter Static VM':
+            try:
+                self._wait_for_ip(api, deployed_app_name, wait_for_ip, lock, message_status)
+            except Exception as exc:
+                self.logger.error("Error refreshing IP on deployed app {0} in reservation {1}. Error: {2}"
+                                  .format(deployed_app_name, self.reservation_id, str(exc)))
+                return False, "Error refreshing IP deployed app {0}. Error: {1}".format(deployed_app_name, exc.message)
 
-        try:
-            self._wait_for_ip(api, deployed_app_name, wait_for_ip, lock, message_status)
-        except Exception as exc:
-            self.logger.error("Error refreshing IP on deployed app {0} in reservation {1}. Error: {2}"
-                              .format(deployed_app_name, self.reservation_id, str(exc)))
-            return False, "Error refreshing IP deployed app {0}. Error: {1}".format(deployed_app_name, exc.message)
-
-        try:
-            self._install(api, deployed_app_data, deployed_app_name, lock, message_status)
-        except Exception as exc:
-            self.logger.error("Error installing deployed app {0} in reservation {1}. Error: {2}"
-                              .format(deployed_app_name, self.reservation_id, str(exc)))
-            return False, "Error installing deployed app {0}. Error: {1}".format(deployed_app_name, str(exc))
+            try:
+                self._install(api, deployed_app_data, deployed_app_name, lock, message_status)
+            except Exception as exc:
+                self.logger.error("Error installing deployed app {0} in reservation {1}. Error: {2}"
+                                  .format(deployed_app_name, self.reservation_id, str(exc)))
+                return False, "Error installing deployed app {0}. Error: {1}".format(deployed_app_name, str(exc))
 
         return True, ""
 
