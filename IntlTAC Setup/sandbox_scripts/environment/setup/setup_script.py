@@ -90,6 +90,7 @@ class EnvironmentSetup(object):
 
         # Check for presense of version selector input
         if 'GigaVue Version' in global_inputs:
+            self.logger.info("Executing load_firmware for relevant devices: version " + global_inputs['GigaVue Version'])
             api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message = 'Beginning load_firmware')
             version = global_inputs['GigaVue Version']
             self._apply_software_image(api=api,
@@ -148,13 +149,20 @@ class EnvironmentSetup(object):
             return
 
         for line in version_lines:
-            model,version_string,path = line.split(',')
+            try:
+                model,version_string,path = line.split(',')
+            except ValueError:
+                self.logger.error('Incorrect line format in version_index.txt: ' + line)
+                api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message =
+                'Unable to apply software images,configuration file format error')
+                return
             if model not in version_lookup:
                 version_lookup[model] = {}
             version_lookup[model][version_string] = path
 
         running_resources = []
         for resource in reservation_details.ReservationDescription.Resources: # go through the list of resources
+            self.logger.debug("Determining if load_firmware will run on " + resource.Name)
             if '/' not in resource.FullAddress: # this filters out any sub-resources (sub resources have '/' in full add.
                 attributes = api.GetResourceDetails(resource.Name).ResourceAttributes
                 model=None
@@ -169,12 +177,17 @@ class EnvironmentSetup(object):
                         if ftp_host is None:
                             api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message =
                                                                 'Error loading firmware on ' + resource.Name +
-                                                                ', FTP connected')
+                                                                ', FTP not connected')
+                            self.logger.error('Error loading firmware on ' + resource.Name +
+                                                                ', FTP not connected')
                             break
                         api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message='Loading firmware on ' +
                                                                                                resource.Name)
                         api.WriteMessageToReservationOutput(reservationId=self.reservation_id, message='-- ' +
                                                                                                version_lookup[model][version])
+
+                        self.logger.info('Loading firmware on ' + resource.Name)
+                        self.logger.info(version_lookup[model][version])
                         command_inputs = []
                         command_inputs.append(InputNameValue('file_path', version_lookup[model][version]))
                         command_inputs.append(InputNameValue('remote_host', remote_host))
