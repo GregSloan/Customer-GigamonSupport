@@ -42,6 +42,7 @@ except Exception as exc:
     raise exc
 
 version_lines=[]
+device_configs = []
 try:
     device_configs = ftp.nlst('Configs/Devices/' + resource.name)
 
@@ -63,9 +64,10 @@ except Exception as exc:
 
 
 print '\n========================\nAvailable Configs Full Path\n========================'
-print 'For This Device'
-for config in device_configs:
-    print '--' + config
+if len(device_configs) > 0:
+    print 'For This Device'
+    for config in device_configs:
+        print '--' + config
 
 print 'For any device of model ' + resource_model
 for config in model_configs:
